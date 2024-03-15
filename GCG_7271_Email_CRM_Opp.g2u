@@ -1,0 +1,267 @@
+﻿Program.Sub.Preflight.Start
+Program.External.Include.Library("GCG_5881_Try_Catch.lib")
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Created by BixRB
+'12 Feb 2020
+'GCG_5881_Email_CRM_Opp.g2u
+'C3 Corporation
+'email internal assignment when an opportunity is created
+
+'Modified by Angel Tudon
+'August 2023
+'Quote: 14313 - 0
+'Ticket: https://www.gss-service.com/Calls/CallEditInternalOpen/1410217
+'Modification of the scripts changes the logic to send the notification email as soon as the user hits saves on a newly created opportunity. They no longer need to go into the notes section and save there before the email sends as it did in the original scrpits.
+
+V.Local.sTemp.Declare
+
+F.Intrinsic.Control.SelectCase(V.Caller.Hook)
+	F.Intrinsic.Control.Case(51025)
+		'CRM Save Opportunity Hook
+		'Ask user if they want to send an email
+		F.Intrinsic.Control.CallSub(SendEmailMsg)
+		'Returns V.Args.MsgReturn Boolean
+		F.Intrinsic.Control.CallSub(ClearTable)
+		F.Intrinsic.Control.If(V.Args.MsgReturn)
+			'Send email
+			F.Intrinsic.Control.CallSub(AddOppToTable,"OppID",V.Passed.DATA-CRM-OppSel.Long,"OppType",V.Passed.DATA-cboOppType.Trim,"OppStatus",V.Passed.DATA-cboOppStatus.Trim,"IntAssign",V.Passed.DATA-CRM-Opp_Int_Assign_UID)
+		F.Intrinsic.Control.EndIf
+		
+		'Read Table to see if an opportunity is queued for email
+		F.Intrinsic.Control.CallSub(CheckTable)
+		'Returns V.Args.TableRet
+		F.Intrinsic.Control.If(V.Args.TableRet)
+			'Email queued, read it and Passed values and send it. 'Passing blank values for UF9 and UF10 as modification of the scripts will not use them
+			F.Intrinsic.Control.CallSub(SendEmail,"UF9","","UF10","")
+			F.Intrinsic.Control.CallSub(ClearTable)
+		F.Intrinsic.Control.EndIf
+		
+	'Ommiting this section as customer wants modified program to send email upon saving the opportunity without having to save the notes screen.
+'	F.Intrinsic.Control.Case(51031)
+'		'CRM Save Opportunity Notes Hook
+'		'Check if User Field 9 has a value and User Field 10 does not have a value
+'		F.Intrinsic.Control.If(V.Passed.CRM-txtUF-9.Trim,!=,"",and,V.Passed.CRM-txtUF-10.Trim,=,"")
+'			'User Field 9 is not blank and User Field 10 is blank so we need to update User Field 10 based on User Field 9
+'			F.Intrinsic.Control.CallSub(GetCaseNumber,"UF9",V.Passed.CRM-txtUF-9.Trim)
+'			'Returns V.Args.UF10
+'			'This doesn't work lol
+'			V.Passed.CRM-txtUF-10.Set(V.Args.UF10)
+'			'Just update in DB
+'			F.Intrinsic.Control.CallSub(UpdateUF10,"UF10",V.Args.UF10,"OppID",V.Passed.CRM-txtOID.Long)
+'		F.Intrinsic.Control.EndIf
+'		'Read Table to see if an opportunity is queued for email
+'		F.Intrinsic.Control.CallSub(CheckTable)
+'		'Returns V.Args.TableRet
+'		F.Intrinsic.Control.If(V.Args.TableRet)
+'			'Email queued, read it and Passed values and send it
+'			F.Intrinsic.Control.CallSub(SendEmail,"UF9",V.Passed.CRM-txtUF-9.Trim,"UF10",V.Passed.CRM-txtUF-10.Trim)
+'			F.Intrinsic.Control.CallSub(ClearTable)
+'		F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndSelect
+
+Program.Sub.Main.End
+
+Program.Sub.SendEmailMsg.Start
+V.Local.iRet.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.UI.Msgbox("Would you like to send this Opportunity as an email to the Internal Assignment?","Opportunity Email",V.Enum.MsgBoxStyle!YesNo,V.Local.iRet)
+F.Intrinsic.Control.If(V.Local.iRet,=,V.Ambient.MsgBoxYes)
+	F.Intrinsic.Variable.AddRV("MsgReturn",True)
+F.Intrinsic.Control.Else
+	F.Intrinsic.Variable.AddRV("MsgReturn",False)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.SendEmailMsg.End
+
+Program.Sub.ClearTable.Start
+V.Local.sSQL.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.String.Build("delete from GCG_5881_OPP_EMAIL where TERMINAL_ID = '{0}';",V.Caller.Terminal,V.Local.sSQL)
+F.ODBC.Connection!con.OpenCompanyConnection
+F.ODBC.Connection!con.Execute(V.Local.sSQL)
+F.ODBC.Connection!con.Close
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.ClearTable.End
+
+Program.Sub.AddOppToTable.Start
+'V.Args.OppID, V.Args.OppType, V.Args.OppStatus, V.Args.IntAssign
+V.Local.sSQL.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.String.Build("insert into GCG_5881_OPP_EMAIL (TERMINAL_ID, OPP_ID, OPP_TYPE, OPP_STATUS, INT_ASSIGN_UID) values ('{0}', {1}, '{2}', '{3}', '{4}');",V.Caller.Terminal,V.Args.OppID,V.Args.OppType,V.Args.OppStatus,V.Args.IntAssign,V.Local.sSQL)
+F.ODBC.Connection!con.OpenCompanyConnection
+F.ODBC.Connection!con.Execute(V.Local.sSQL)
+F.ODBC.Connection!con.Close
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.AddOppToTable.End
+
+Program.Sub.CheckTable.Start
+V.Local.sSQL.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.String.Build("select 1 from GCG_5881_OPP_EMAIL where TERMINAL_ID = '{0}';",V.Caller.Terminal,V.Local.sSQL)
+F.ODBC.Connection!con.OpenCompanyConnection
+F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sSQL)
+F.ODBC.Connection!con.Close
+F.Intrinsic.Variable.AddRV("TableRet",V.Ambient.ExecuteAndReturnEOF.Not)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.CheckTable.End
+
+Program.Sub.SendEmail.Start
+'V.Args.UF9, V.Args.UF10
+V.Local.sSQL.Declare
+V.Local.sCust.Declare
+V.Local.sFile.Declare
+V.Local.sText.Declare
+V.Local.sSender.Declare
+V.Local.sRecipients.Declare
+V.Local.iUserID.Declare
+V.Local.bExists.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.String.Build("select OPP_ID, OPP_TYPE, OPP_STATUS, INT_ASSIGN_UID from GCG_5881_OPP_EMAIL where TERMINAL_ID = '{0}'",V.Caller.Terminal,V.Local.sSQL)
+'OPEN CONNECTION
+F.ODBC.Connection!con.OpenCompanyConnection
+F.Data.DataTable.CreateFromSQL("dtOppInfo","con",V.Local.sSQL)
+F.Intrinsic.String.Build("select COMPID, COMPTYPE from CRM_OPP_MASTER where OID = {0};",V.DataTable.dtOppInfo(0).OPP_ID!FieldVal,V.Local.sSQL)
+
+'search for customer/vendor/prospect information
+F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sCust)
+F.Intrinsic.String.Split(V.Local.sCust,"*!*",V.Local.sCust)
+'10 = Cust, 15 = Vend, 18 = Prosp
+F.Intrinsic.Control.SelectCase(V.Local.sCust(1).Long)
+	F.Intrinsic.Control.Case(10)
+		'Vendor
+		F.Intrinsic.String.Build("select NAME_VENDOR from V_VENDOR_MASTER where VENDOR = '{0}';",V.Local.sCust(0),V.Local.sSQL)
+		F.Intrinsic.String.Build("Vendor: {0}",V.Local.sCust(0),V.Local.sCust(0))
+	F.Intrinsic.Control.Case(15)
+		'Customer
+		F.Intrinsic.String.Build("select NAME_CUSTOMER from V_CUSTOMER_MASTER where CUSTOMER = '{0}';",V.Local.sCust(0),V.Local.sSQL)
+		F.Intrinsic.String.Build("Customer: {0}",V.Local.sCust(0),V.Local.sCust(0))
+	F.Intrinsic.Control.Case(18)
+		'Prospect
+		F.Intrinsic.String.Build("select NAME_PROSPECT from V_PROSPECT_MASTER where PROSPECT = '{0}';",V.Local.sCust(0),V.Local.sSQL)
+		F.Intrinsic.String.Build("Prospect: {0}",V.Local.sCust(0),V.Local.sCust(0))
+F.Intrinsic.Control.EndSelect
+V.Local.sCust.RedimPreserve(0,0)
+F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sSQL)
+F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF.Not)
+	'Write name into customer information if it could be found 
+	F.Intrinsic.String.Build("{0}, {1}",V.Local.sCust,V.Local.sSQL,V.Local.sCust)
+F.Intrinsic.Control.EndIf
+
+'Get email address
+F.Intrinsic.String.Build("select top 1 rtrim(EMAIL_ADDR) from V_EMPLOYEE_MSTR where PR_USER_ID = '{0}';",V.DataTable.dtOppInfo(0).INT_ASSIGN_UID!FieldValTrim,V.Local.sSQL)
+F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sRecipients)
+F.ODBC.Connection!con.Close
+'CLOSE CONNECTION
+
+F.Intrinsic.Control.If(V.Local.sSQL,=,"",or,V.Ambient.ExecuteAndReturnEOF,=,True)
+	'Email could not be found, notify user and kill program
+	F.Intrinsic.String.Build("Could not find email for Internal Assignment user "{0}". If this user in quotes is blank, the Internal Assignment selected needs a User ID for Global Shop on the Employee Master. If this user is not blank, the Internal Assignment selected needs an email on their Employee Master.",V.DataTable.dtOppInfo(0).INT_ASSIGN_UID!FieldValTrim,V.Local.sSQL)
+	F.Intrinsic.UI.Msgbox(V.Local.sSQL,"Could not find email!")
+	F.Intrinsic.Control.CallSub(ClearTable)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndIf
+
+'Read file
+f.Intrinsic.String.Build("{0}\GAB\GAS\CRMOpp.txt",V.Caller.PluginsDir,v.Caller.CompanyCode,v.Local.sFile)
+F.Intrinsic.File.Exists(V.Local.sFile,V.Local.bExists)
+F.Intrinsic.Control.If(V.Local.bExists,=,False)
+	'Could not find template file, notify user and kill program
+	F.Intrinsic.String.Build("Could not find template file "{0}". Please verify that the file exists and is in the specified path.",V.Local.sFile,V.Local.sSQL)
+	F.Intrinsic.UI.Msgbox(V.Local.sSQL,"Could not find file!")
+	F.Intrinsic.Control.CallSub(ClearTable)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndIf
+
+'Replace wildcards in template file
+F.Intrinsic.File.File2String(V.Local.sFile,V.Local.sText)
+F.Intrinsic.String.Replace(V.local.sText,"%OPPID%",V.DataTable.dtOppInfo(0).OPP_ID!FieldVal,V.Local.sText)
+F.Intrinsic.String.Replace(V.Local.sText,"%CUSTOMER%",V.Local.sCust,V.Local.sText)
+f.Intrinsic.String.Replace(v.Local.sText,"%TYPE%",V.DataTable.dtOppInfo(0).OPP_TYPE!FieldValTrim,v.Local.sText)
+F.Intrinsic.String.Replace(V.Local.sText,"%STATUS%",V.DataTable.dtOppInfo(0).OPP_STATUS!FieldValTrim,V.Local.sText)
+F.Intrinsic.String.Replace(v.Local.sText,"%UF9%",V.Args.UF9,V.Local.sText)
+F.Intrinsic.String.Replace(v.Local.sText,"%UF10%",V.Args.UF10,V.Local.sText)
+F.Intrinsic.String.Split(V.Local.sText,"*!*",V.Local.sText)
+'Index 0, Subject
+'Index 1, Body
+
+'Send email
+F.Global.Security.GetUserId(v.Caller.User,v.Caller.CompanyCode,v.Local.iUserID)
+F.Global.Security.GetUserEmail(V.Caller.User,V.Local.sSender)
+F.Intrinsic.String.Build("{0}*!*",V.Local.sSender,V.Local.sSender)
+F.Intrinsic.String.Build("*!*{0}",V.Local.sRecipients,V.Local.sRecipients)
+F.Global.Messaging.QueueMessage(V.Caller.CompanyCode,v.Local.iUserID,"GCG_5881_Email_CRM_Opp.g2u",V.Local.sText(0),V.Local.sSender,V.Local.sRecipients,V.Local.sText(1),5,,False,,,,,,,,,False)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.SendEmail.End
+
+Program.Sub.GetCaseNumber.Start
+'V.Args.UF9
+V.Local.sJDNM.Declare
+V.Local.iJDNM.Declare
+V.Local.fJDNM.Declare
+V.Local.dJDNM.Declare
+F.Intrinsic.Control.Try
+
+'Julian Day Number Modified of Jan 1, 2020 12:00:00 AM on Current Timezone is 0
+F.Intrinsic.Date.DateTimeSerial(2020,1,1,0,0,0,V.Local.dJDNM)
+F.Intrinsic.Date.DateDiff("s",V.Local.dJDNM,V.Ambient.Now,V.Local.iJDNM)
+'Returns seconds between now and 1/1/2020 12:00:00 PM, Divide by 60, 60, 24 to get the amount of days between then and now
+F.Intrinsic.Math.Div(V.Local.iJDNM,86400,V.Local.fJDNM)
+'If a reference date besides 1/1/2020 is used, the date difference will be added here
+F.Intrinsic.Math.Add(V.Local.fJDNM,0,V.Local.fJDNM)
+F.Intrinsic.String.Format(V.Local.fJDNM,"#,###,###,##0.00000",V.Local.sJDNM)
+
+F.Intrinsic.String.Build("{0}-{1}",V.Args.UF9,V.Local.sJDNM,V.Local.sJDNM)
+F.Intrinsic.Variable.AddRV("UF10",V.Local.sJDNM)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.GetCaseNumber.End
+
+Program.Sub.UpdateUF10.Start
+'V.Args.UF10, V.Args.OppID
+V.Local.sSQL.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.String.Build("select 1 from CRM_UF_VALUE where OID = {0};",V.Args.OppID.String,V.Local.sSQL)
+'OPENCONNECTION
+F.ODBC.Connection!con.OpenCompanyConnection
+F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sSQL)
+F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF.Not)
+	F.Intrinsic.String.Build("update CRM_UF_VALUE set UF10 = '{1}' where OID = {0}",V.Args.OppID,V.Args.UF10,V.Local.sSQL)
+	F.ODBC.Connection!con.Execute(V.Local.sSQL)
+F.Intrinsic.Control.EndIf
+F.ODBC.Connection!con.Close
+'CLOSECONNECTION
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.UpdateUF10.End
+
+Program.Sub.Comments.Start
+${$5$}$20.1.8286.22461$}$1
+${$6$}$Angel$}$20230830160149166$}$KXl0r/FkrMYwb/r4ukQ87VNzvoHa8Zo7VAkMGYg/MwHH9L28rUcRziO8iXeBlngI9tr69+XLI5g=
+Program.Sub.Comments.End
