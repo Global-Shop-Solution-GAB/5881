@@ -1,0 +1,17 @@
+Subject goes here*!*Body starts here and continues on each new line after
+
+%OPPID% - This wildcard replaces with the Opportunity ID
+
+%CUSTOMER% - This wildcard replaces with this string "Customer/Vendor/Prospect: ######, Name" where the pounds are the ID of the Customer/Vendor/Prospect
+
+%TYPE% - This wildcard replaces with the Opportunity Type
+
+%STATUS% - This wildcard replaces with the Opportunity Status
+
+%UF9% - This wildcard replaces with the Opportunity User Field 9
+
+%UF10% - This wildcard replaces with the Opportunity User Field 10
+
+All wildcards must be fully capitalized for the program to replace them when it sends the email
+
+This file can be edited under the ..\Global\CUSTOM\5881\CCC\templates\CRMOpp.txt file on your Global database server where "CCC" is the company code(s).
